@@ -1,0 +1,388 @@
+syntax = "proto2";
+
+package socialmedia;
+
+// Existing Enumerations
+
+enum ReactionType {
+  UNKNOWN = 0;
+  LIKE = 1;
+  LOVE = 2;
+  HAHA = 3;
+  WOW = 4;
+  SAD = 5;
+  ANGRY = 6;
+}
+
+enum FriendRequestStatus {
+  PENDING = 0;
+  ACCEPTED = 1;
+  REJECTED = 2;
+}
+
+enum GroupRole {
+  MEMBER = 0;
+  ADMIN = 1;
+  MODERATOR = 2;
+}
+
+enum NotificationType {
+  INFO = 0;
+  WARNING = 1;
+  ALERT = 2;
+}
+
+enum MediaType {
+  IMAGE = 0;
+  VIDEO = 1;
+  AUDIO = 2;
+}
+
+enum DeviceType {
+  MOBILE = 0;
+  DESKTOP = 1;
+  TABLET = 2;
+}
+
+enum TargetType {
+  POST = 0;
+  COMMENT = 1;
+  USER = 2;
+  EVENT = 3;
+}
+
+enum Gender {
+  NOT_SPECIFIED = 0;
+  MALE = 1;
+  FEMALE = 2;
+  OTHER = 3;
+}
+
+// Existing enumeration with modifications
+enum ActivityType {
+  UNKNOWN = 0;
+  POSTED = 1;
+  LIKED = 2;
+  COMMENTED = 3;
+  SHARED = 4;
+  FOLLOWED = 5;
+}
+
+// New Enumerations for additional messages
+enum StreamStatus {
+  UPCOMING = 0;
+  LIVE = 1;
+  FINISHED = 2;
+  CANCELLED = 3;
+}
+
+enum ListingStatus {
+  ACTIVE = 0;
+  SOLD = 1;
+  CANCELLED = 2;
+}
+
+// Message definitions
+
+message User {
+  required int64 id = 1;
+  required string handle = 2; // renamed from username
+  optional string email = 3;
+  optional Profile profile = 4;
+  repeated string friend_handles = 5; // changed from int64 friend_ids to string friend_handles
+  optional string account_type = 6; // new field
+
+  // Nested message for user statistics with an added field for comments
+  message UserStats {
+    optional int32 post_count = 1 [default = 0];
+    optional int32 follower_count = 2 [default = 0];
+    optional int32 following_count = 3 [default = 0];
+    optional int32 comment_count = 4 [default = 0]; // new field
+  }
+  optional UserStats stats = 7;
+}
+
+message Profile {
+  optional string biography = 1; // renamed from bio
+  optional string avatar_url = 2;
+  optional string location = 3;
+  repeated string interests = 4;
+  optional string website = 5; // new field
+}
+
+message Post {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional string text = 3; // renamed from content
+  optional int64 timestamp = 4;
+  repeated Comment comments = 5;
+  repeated Tag tags = 6;
+  optional PostType type = 7 [default = TEXT];
+
+  // Enumeration for post types
+  enum PostType {
+    TEXT = 0;
+    IMAGE = 1;
+    VIDEO = 2;
+    LINK = 3;
+  }
+
+  // Nested message for post metadata with an added view count
+  message Metadata {
+    optional int32 share_count = 1 [default = 0];
+    optional int32 reaction_count = 2 [default = 0];
+    optional int32 view_count = 3 [default = 0]; // new field
+  }
+  optional Metadata metadata = 8;
+  optional bool edited = 9 [default = false]; // new field
+}
+
+message Comment {
+  required int64 id = 1;
+  required int64 post_id = 2;
+  required int64 user_id = 3;
+  optional string text_content = 4; // renamed from content
+  optional int64 timestamp = 5;
+  repeated Reaction reactions = 6;
+  optional bool edited = 7 [default = false]; // new field
+}
+
+message Reaction {
+  required int64 id = 1;
+  required ReactionType type = 2 [default = LIKE];
+  required int64 user_id = 3;
+  optional int64 post_id = 4;
+  optional int64 comment_id = 5;
+}
+
+message Share {
+  required int64 id = 1;
+  required int64 post_id = 2;
+  required int64 user_id = 3;
+  optional int64 shared_time = 4;
+}
+
+message FriendRequest {
+  required int64 id = 1;
+  required int64 from_user_id = 2;
+  required int64 to_user_id = 3;
+  optional FriendRequestStatus request_status = 4 [default = PENDING]; // renamed field
+  optional int64 timestamp = 5;
+}
+
+message Friendship {
+  required int64 id = 1;
+  required int64 user1_id = 2;
+  required int64 user2_id = 3;
+  optional int64 since = 4;
+  optional int32 friendship_level = 5 [default = 1]; // new field
+}
+
+message Group {
+  required int64 id = 1;
+  required string name = 2;
+  optional string description = 3;
+  optional int64 created_time = 4;
+  repeated GroupMember members = 5;
+
+  // Nested message for group settings
+  message GroupSettings {
+    optional bool is_public = 1 [default = true];
+    repeated string tags = 2;
+  }
+  optional GroupSettings settings = 6;
+  optional string topic = 7; // new field
+}
+
+message GroupMember {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional GroupRole role = 3 [default = MEMBER];
+  optional int64 member_since = 4; // renamed from joined_time
+}
+
+message Page {
+  required int64 id = 1;
+  required string title = 2;
+  optional string description = 3;
+  required int64 owner_user_id = 4;
+  optional int64 created_time = 5;
+
+  // Nested message for page statistics with an added view count
+  message PageStats {
+    optional int32 like_count = 1 [default = 0];
+    optional int32 share_count = 2 [default = 0];
+    optional int32 view_count = 3 [default = 0]; // new field
+  }
+  optional PageStats stats = 6;
+  optional string cover_image_url = 7; // new field
+}
+
+message Event {
+  required int64 id = 1;
+  required string title = 2;
+  optional string description = 3;
+  optional Location location = 4;
+  required int64 start_time = 5;
+  optional int64 end_time = 6;
+  required int64 organizer_user_id = 7;
+  repeated int64 attendee_ids = 8;
+  optional string event_type = 9; // new field
+}
+
+message DirectMessage {
+  required int64 id = 1;
+  required int64 from_user_id = 2;
+  required int64 to_user_id = 3;
+  required string content = 4;
+  optional int64 timestamp = 5;
+  repeated Attachment attachments = 6;
+
+  // Nested message for message attachments
+  message Attachment {
+    optional string url = 1;
+    optional string type = 2;
+  }
+  optional int32 priority = 7 [default = 0]; // new field
+}
+
+message Conversation {
+  required int64 id = 1;
+  repeated int64 participant_ids = 2;
+  repeated DirectMessage messages = 3;
+  optional int64 last_updated = 4; // new field
+}
+
+message Notification {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional NotificationType type = 3 [default = INFO];
+  optional string message = 4;
+  optional bool read = 5 [default = false];
+  optional int64 timestamp = 6;
+  optional string category = 7; // new field
+}
+
+message Story {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional string content = 3;
+  optional int64 timestamp = 4;
+  optional int64 expires_time = 5;
+  repeated Media media = 6;
+  optional Location location = 7; // new field
+}
+
+message Media {
+  required int64 id = 1;
+  optional MediaType type = 2 [default = IMAGE];
+  required string url = 3;
+  optional string thumbnail = 4;
+  optional string description = 5; // renamed from caption
+  optional int64 timestamp = 6;
+  optional string format = 7; // new field
+}
+
+message Tag {
+  required int64 id = 1;
+  required string name = 2;
+  optional string description = 3;
+}
+
+message Hashtag {
+  required int64 id = 1;
+  required string tag = 2;
+  optional int32 usage_count = 3 [default = 0];
+  optional string category = 4;
+}
+
+message Location {
+  required int64 id = 1;
+  required string name = 2;
+  optional double latitude = 3;
+  optional double longitude = 4;
+  optional string address = 5;
+}
+
+message Device {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional DeviceType device_type = 3 [default = MOBILE];
+  optional string operating_system = 4;
+  optional string notification_token = 5; // renamed from push_token
+  optional int64 last_active = 6; // new field
+}
+
+message Activity {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  required ActivityType action = 3; // changed type from string to ActivityType
+  optional int64 target_id = 4;
+  optional TargetType target_type = 5 [default = POST];
+  optional int64 timestamp = 6;
+}
+
+message Advertisement {
+  required int64 id = 1;
+  required int64 advertiser_id = 2;
+  required string content = 3;
+  required string target_url = 4;
+  required int64 start_time = 5;
+  optional int64 end_time = 6;
+  repeated Demographic demographics = 7;
+
+  // Nested message for advertisement demographics with a renamed field and new field added
+  message Demographic {
+    required int64 id = 1;
+    optional string ageGroup = 2; // renamed from age_range
+    optional Gender gender = 3 [default = NOT_SPECIFIED];
+    optional string location = 4;
+    optional string income_level = 5; // new field
+  }
+}
+
+message Poll {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  required string query = 3; // renamed from question
+  repeated string options = 4;
+  repeated int32 votes = 5;
+  optional int64 timestamp = 6;
+  optional bool multiple_choice = 7 [default = false]; // new field
+}
+
+message Report {
+  required int64 id = 1;
+  required int64 reporter_user_id = 2;
+  required int64 target_id = 3;
+  required string report_reason = 4; // renamed from reason
+  optional int64 timestamp = 5;
+}
+
+// New Messages
+
+message LiveStream {
+  required int64 id = 1;
+  required int64 streamer_id = 2;
+  required string title = 3;
+  optional string description = 4;
+  required string stream_url = 5;
+  optional string thumbnail_url = 6;
+  required int64 start_time = 7;
+  optional int64 end_time = 8;
+  optional int32 current_viewers = 9 [default = 0];
+  required StreamStatus status = 10;
+}
+
+message MarketplaceListing {
+  required int64 id = 1;
+  required int64 seller_id = 2;
+  required string title = 3;
+  optional string description = 4;
+  required double price = 5;
+  required string currency = 6 [default = "USD"];
+  required int64 listing_time = 7;
+  optional int64 expiration_time = 8;
+  repeated string images = 9;
+  optional ListingStatus status = 10 [default = ACTIVE];
+}

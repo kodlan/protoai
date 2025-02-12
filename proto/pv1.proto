@@ -1,0 +1,316 @@
+syntax = "proto2";
+
+package socialmedia;
+
+// Enumerations
+enum ReactionType {
+  UNKNOWN = 0;
+  LIKE = 1;
+  LOVE = 2;
+  HAHA = 3;
+  WOW = 4;
+  SAD = 5;
+  ANGRY = 6;
+}
+
+enum FriendRequestStatus {
+  PENDING = 0;
+  ACCEPTED = 1;
+  REJECTED = 2;
+}
+
+enum GroupRole {
+  MEMBER = 0;
+  ADMIN = 1;
+  MODERATOR = 2;
+}
+
+enum NotificationType {
+  INFO = 0;
+  WARNING = 1;
+  ALERT = 2;
+}
+
+enum MediaType {
+  IMAGE = 0;
+  VIDEO = 1;
+  AUDIO = 2;
+}
+
+enum DeviceType {
+  MOBILE = 0;
+  DESKTOP = 1;
+  TABLET = 2;
+}
+
+enum TargetType {
+  POST = 0;
+  COMMENT = 1;
+  USER = 2;
+  EVENT = 3;
+}
+
+enum Gender {
+  NOT_SPECIFIED = 0;
+  MALE = 1;
+  FEMALE = 2;
+  OTHER = 3;
+}
+
+// Message definitions
+
+message User {
+  required int64 id = 1;
+  required string username = 2;
+  optional string email = 3;
+  optional Profile profile = 4;
+  repeated int64 friend_ids = 5; // IDs of friends
+
+  // Nested message for user statistics
+  message UserStats {
+    optional int32 post_count = 1 [default = 0];
+    optional int32 follower_count = 2 [default = 0];
+    optional int32 following_count = 3 [default = 0];
+  }
+  optional UserStats stats = 6;
+}
+
+message Profile {
+  optional string bio = 1;
+  optional string avatar_url = 2;
+  optional string location = 3;
+  repeated string interests = 4;
+}
+
+message Post {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional string content = 3;
+  optional int64 timestamp = 4;
+  repeated Comment comments = 5;
+  repeated Tag tags = 6;
+  optional PostType type = 7 [default = TEXT];
+
+  // Enumeration for post types
+  enum PostType {
+    TEXT = 0;
+    IMAGE = 1;
+    VIDEO = 2;
+    LINK = 3;
+  }
+
+  // Nested message for post metadata
+  message Metadata {
+    optional int32 share_count = 1 [default = 0];
+    optional int32 reaction_count = 2 [default = 0];
+  }
+  optional Metadata metadata = 8;
+}
+
+message Comment {
+  required int64 id = 1;
+  required int64 post_id = 2;
+  required int64 user_id = 3;
+  optional string content = 4;
+  optional int64 timestamp = 5;
+  repeated Reaction reactions = 6;
+}
+
+message Reaction {
+  required int64 id = 1;
+  required ReactionType type = 2 [default = LIKE];
+  required int64 user_id = 3;
+  optional int64 post_id = 4;
+  optional int64 comment_id = 5;
+}
+
+message Share {
+  required int64 id = 1;
+  required int64 post_id = 2;
+  required int64 user_id = 3;
+  optional int64 shared_time = 4;
+}
+
+message FriendRequest {
+  required int64 id = 1;
+  required int64 from_user_id = 2;
+  required int64 to_user_id = 3;
+  optional FriendRequestStatus status = 4 [default = PENDING];
+  optional int64 timestamp = 5;
+}
+
+message Friendship {
+  required int64 id = 1;
+  required int64 user1_id = 2;
+  required int64 user2_id = 3;
+  optional int64 since = 4;
+}
+
+message Group {
+  required int64 id = 1;
+  required string name = 2;
+  optional string description = 3;
+  optional int64 created_time = 4;
+  repeated GroupMember members = 5;
+
+  // Nested message for group settings
+  message GroupSettings {
+    optional bool is_public = 1 [default = true];
+    repeated string tags = 2;
+  }
+  optional GroupSettings settings = 6;
+}
+
+message GroupMember {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional GroupRole role = 3 [default = MEMBER];
+  optional int64 joined_time = 4;
+}
+
+message Page {
+  required int64 id = 1;
+  required string title = 2;
+  optional string description = 3;
+  required int64 owner_user_id = 4;
+  optional int64 created_time = 5;
+
+  // Nested message for page statistics
+  message PageStats {
+    optional int32 like_count = 1 [default = 0];
+    optional int32 share_count = 2 [default = 0];
+  }
+  optional PageStats stats = 6;
+}
+
+message Event {
+  required int64 id = 1;
+  required string title = 2;
+  optional string description = 3;
+  optional Location location = 4;
+  required int64 start_time = 5;
+  optional int64 end_time = 6;
+  required int64 organizer_user_id = 7;
+  repeated int64 attendee_ids = 8;
+}
+
+message DirectMessage {
+  required int64 id = 1;
+  required int64 from_user_id = 2;
+  required int64 to_user_id = 3;
+  required string content = 4;
+  optional int64 timestamp = 5;
+  repeated Attachment attachments = 6;
+
+  // Nested message for message attachments
+  message Attachment {
+    optional string url = 1;
+    optional string type = 2;
+  }
+}
+
+message Conversation {
+  required int64 id = 1;
+  repeated int64 participant_ids = 2;
+  repeated DirectMessage messages = 3;
+}
+
+message Notification {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional NotificationType type = 3 [default = INFO];
+  optional string message = 4;
+  optional bool read = 5 [default = false];
+  optional int64 timestamp = 6;
+}
+
+message Story {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional string content = 3;
+  optional int64 timestamp = 4;
+  optional int64 expires_time = 5;
+  repeated Media media = 6;
+}
+
+message Media {
+  required int64 id = 1;
+  optional MediaType type = 2 [default = IMAGE];
+  required string url = 3;
+  optional string thumbnail = 4;
+  optional string caption = 5;
+  optional int64 timestamp = 6;
+}
+
+message Tag {
+  required int64 id = 1;
+  required string name = 2;
+  optional string description = 3;
+}
+
+message Hashtag {
+  required int64 id = 1;
+  required string tag = 2;
+  optional int32 usage_count = 3 [default = 0];
+  optional string category = 4;
+}
+
+message Location {
+  required int64 id = 1;
+  required string name = 2;
+  optional double latitude = 3;
+  optional double longitude = 4;
+  optional string address = 5;
+}
+
+message Device {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  optional DeviceType device_type = 3 [default = MOBILE];
+  optional string operating_system = 4;
+  optional string push_token = 5;
+}
+
+message Activity {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  required string action = 3;
+  optional int64 target_id = 4;
+  optional TargetType target_type = 5 [default = POST];
+  optional int64 timestamp = 6;
+}
+
+message Advertisement {
+  required int64 id = 1;
+  required int64 advertiser_id = 2;
+  required string content = 3;
+  required string target_url = 4;
+  required int64 start_time = 5;
+  optional int64 end_time = 6;
+  repeated Demographic demographics = 7;
+
+  // Nested message for advertisement demographics
+  message Demographic {
+    required int64 id = 1;
+    optional string age_range = 2;
+    optional Gender gender = 3 [default = NOT_SPECIFIED];
+    optional string location = 4;
+  }
+}
+
+message Poll {
+  required int64 id = 1;
+  required int64 user_id = 2;
+  required string question = 3;
+  repeated string options = 4;
+  repeated int32 votes = 5;
+  optional int64 timestamp = 6;
+}
+
+message Report {
+  required int64 id = 1;
+  required int64 reporter_user_id = 2;
+  required int64 target_id = 3;
+  required string reason = 4;
+  optional int64 timestamp = 5;
+}
