@@ -1,9 +1,12 @@
 import os
 import click
 import shutil
+import json
+from datetime import datetime
 from rich.console import Console
 from dotenv import load_dotenv
 from grpc_tools import protoc
+from google.protobuf import descriptor_pb2
 
 # Load environment variables
 load_dotenv()
@@ -11,6 +14,150 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Initialize Rich console
 console = Console()
+
+def clear_output_folders():
+    """Clear both descriptor and json output folders."""
+    folders = [
+        os.path.join('output', 'descriptor'),
+        os.path.join('output', 'json')
+    ]
+    for folder in folders:
+        if os.path.exists(folder):
+            shutil.rmtree(folder)
+        os.makedirs(folder)
+
+def extract_schema_info(file_desc) -> dict:
+    """
+    Extract structured information from a file descriptor.
+    
+    Args:
+        file_desc: FileDescriptorProto object
+    
+    Returns:
+        dict: Structured schema information
+    """
+    schema_info = {
+        'file_name': file_desc.name,
+        'package': file_desc.package,
+        'syntax': file_desc.syntax,
+        'messages': [],
+        'enums': [],
+        'services': []
+    }
+    
+    # Extract message information
+    for message in file_desc.message_type:
+        msg_info = {
+            'name': message.name,
+            'fields': []
+        }
+        
+        for field in message.field:
+            field_info = {
+                'name': field.name,
+                'number': field.number,
+                'label': field.label,
+                'type': field.type,
+                'type_name': field.type_name,
+                'json_name': field.json_name,
+                'options': str(field.options) if field.HasField('options') else None
+            }
+            msg_info['fields'].append(field_info)
+            
+        schema_info['messages'].append(msg_info)
+    
+    # Extract enum information
+    for enum in file_desc.enum_type:
+        enum_info = {
+            'name': enum.name,
+            'values': [
+                {'name': value.name, 'number': value.number}
+                for value in enum.value
+            ]
+        }
+        schema_info['enums'].append(enum_info)
+    
+    # Extract service information
+    for service in file_desc.service:
+        service_info = {
+            'name': service.name,
+            'methods': [
+                {
+                    'name': method.name,
+                    'input_type': method.input_type,
+                    'output_type': method.output_type,
+                    'client_streaming': method.client_streaming,
+                    'server_streaming': method.server_streaming
+                }
+                for method in service.method
+            ]
+        }
+        schema_info['services'].append(service_info)
+    
+    return schema_info
+
+def create_schema_snapshot(schema_info: dict) -> dict:
+    """
+    Create a versioned snapshot from schema information.
+    
+    Args:
+        schema_info (dict): Extracted schema information
+    
+    Returns:
+        dict: Snapshot with metadata
+    """
+    return {
+        'metadata': {
+            'version': '1.0',
+            'timestamp': datetime.utcnow().isoformat(),
+            'source_file': schema_info['file_name']
+        },
+        'schema': schema_info
+    }
+
+def store_schema_snapshot(snapshot: dict, file_name: str) -> None:
+    """
+    Store the schema snapshot as a JSON file.
+    
+    Args:
+        snapshot (dict): Schema snapshot to store
+        file_name (str): Original proto file name (used to generate JSON file name)
+    """
+    output_dir = os.path.join('output', 'json')
+    base_name = os.path.splitext(os.path.basename(file_name))[0]
+    json_path = os.path.join(output_dir, f"{base_name}.json")
+    
+    with open(json_path, 'w') as f:
+        json.dump(snapshot, f, indent=2)
+    
+    console.print(f"[green]Stored schema snapshot: {json_path}[/green]")
+
+def process_descriptor_file(descriptor_path: str) -> None:
+    """
+    Process a descriptor file through the extraction pipeline.
+    
+    Args:
+        descriptor_path (str): Path to the descriptor file
+    """
+    try:
+        # Read the descriptor set from file
+        with open(descriptor_path, 'rb') as f:
+            descriptor_set = descriptor_pb2.FileDescriptorSet()
+            descriptor_set.ParseFromString(f.read())
+
+        # Process each file descriptor
+        for file_desc in descriptor_set.file:
+            # Step 1: Extract schema information
+            schema_info = extract_schema_info(file_desc)
+            
+            # Step 2: Create snapshot
+            snapshot = create_schema_snapshot(schema_info)
+            
+            # Step 3: Store snapshot
+            store_schema_snapshot(snapshot, file_desc.name)
+
+    except Exception as e:
+        console.print(f"[red]Error processing descriptor file {descriptor_path}: {str(e)}[/red]")
 
 def clear_descriptor_folder(output_dir: str) -> None:
     """
@@ -96,7 +243,21 @@ def read_proto_folder(folder_path: str = "proto") -> None:
 def main(folder: str):
     """Process .proto files from the specified folder."""
     try:
+        # Clear output folders
+        clear_output_folders()
+        
+        # First generate the descriptor files
         read_proto_folder(folder)
+        
+        # Then process each descriptor file
+        console.print("\n[blue]Processing descriptor files:[/blue]")
+        output_dir = os.path.join('output', 'descriptor')
+        if os.path.exists(output_dir):
+            for desc_file in os.listdir(output_dir):
+                if desc_file.endswith('.desc'):
+                    desc_path = os.path.join(output_dir, desc_file)
+                    process_descriptor_file(desc_path)
+
     except Exception as e:
         console.print(f"[red]Error processing proto files: {str(e)}[/red]")
 
