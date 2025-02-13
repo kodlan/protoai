@@ -26,135 +26,166 @@ def clear_output_folders():
             shutil.rmtree(folder)
         os.makedirs(folder)
 
-def extract_schema_info(file_desc) -> dict:
-    """
-    Extract structured information from a file descriptor.
-    
-    Args:
-        file_desc: FileDescriptorProto object
-    
-    Returns:
-        dict: Structured schema information
-    """
-    # Mapping of protobuf type numbers to their names
+def extract_field_info(field) -> dict:
+    """Extract information about a field."""
     FIELD_TYPES = {
-        1: "double",
-        2: "float",
-        3: "int64",
-        4: "uint64",
-        5: "int32",
-        6: "fixed64",
-        7: "fixed32",
-        8: "bool",
-        9: "string",
-        10: "group",
-        11: "message",
-        12: "bytes",
-        13: "uint32",
-        14: "enum",
-        15: "sfixed32",
-        16: "sfixed64",
-        17: "sint32",
-        18: "sint64"
+        1: "double", 2: "float", 3: "int64", 4: "uint64",
+        5: "int32", 6: "fixed64", 7: "fixed32", 8: "bool",
+        9: "string", 10: "group", 11: "message", 12: "bytes",
+        13: "uint32", 14: "enum", 15: "sfixed32", 16: "sfixed64",
+        17: "sint32", 18: "sint64"
+    }
+    
+    return {
+        'name': field.name,
+        'number': field.number,
+        'label': field.label,
+        'type': field.type_name if field.type_name else FIELD_TYPES.get(field.type, f"unknown_{field.type}"),
+        'json_name': field.json_name,
+        'options': str(field.options) if field.HasField('options') else None
     }
 
-    schema_info = {
-        'file_name': file_desc.name,
-        'package': file_desc.package,
-        'syntax': file_desc.syntax,
-        'messages': [],
-        'enums': [],
-        'services': []
+def extract_message_info(message, parent_path="") -> list:
+    """
+    Extract information about a message and its nested messages.
+    Returns a list of message documents.
+    """
+    current_path = f"{parent_path}.{message.name}" if parent_path else message.name
+    
+    # Create document for current message
+    message_doc = {
+        'type': 'message',
+        'name': message.name,
+        'full_path': current_path,
+        'fields': [extract_field_info(field) for field in message.field],
+        'nested_messages': [nested.name for nested in message.nested_type],
+        'nested_enums': [enum.name for enum in message.enum_type]
     }
     
-    # Extract message information
-    for message in file_desc.message_type:
-        msg_info = {
-            'name': message.name,
-            'fields': []
-        }
-        
-        for field in message.field:
-            # Use type_name for custom types, otherwise use the mapped standard type
-            field_type = field.type_name if field.type_name else FIELD_TYPES.get(field.type, f"unknown_{field.type}")
-            
-            field_info = {
-                'name': field.name,
-                'number': field.number,
-                'label': field.label,
-                'type': field_type,  # Use the resolved type name
-                'json_name': field.json_name,
-                'options': str(field.options) if field.HasField('options') else None
-            }
-            msg_info['fields'].append(field_info)
-            
-        schema_info['messages'].append(msg_info)
+    documents = [message_doc]
     
-    # Extract enum information
-    for enum in file_desc.enum_type:
-        enum_info = {
+    # Process nested messages
+    for nested in message.nested_type:
+        nested_docs = extract_message_info(nested, current_path)
+        documents.extend(nested_docs)
+    
+    # Process nested enums
+    for enum in message.enum_type:
+        enum_doc = {
+            'type': 'enum',
             'name': enum.name,
+            'full_path': f"{current_path}.{enum.name}",
+            'parent_message': message.name,
             'values': [
                 {'name': value.name, 'number': value.number}
                 for value in enum.value
             ]
         }
-        schema_info['enums'].append(enum_info)
+        documents.append(enum_doc)
     
-    # Extract service information
-    for service in file_desc.service:
-        service_info = {
-            'name': service.name,
-            'methods': [
-                {
-                    'name': method.name,
-                    'input_type': method.input_type,
-                    'output_type': method.output_type,
-                    'client_streaming': method.client_streaming,
-                    'server_streaming': method.server_streaming
-                }
-                for method in service.method
-            ]
-        }
-        schema_info['services'].append(service_info)
-    
-    return schema_info
+    return documents
 
-def create_schema_snapshot(schema_info: dict) -> dict:
-    """
-    Create a versioned snapshot from schema information.
-    
-    Args:
-        schema_info (dict): Extracted schema information
-    
-    Returns:
-        dict: Snapshot with metadata
-    """
+def extract_service_info(service) -> dict:
+    """Extract information about a service."""
     return {
-        'metadata': {
-            'version': '1.0',
-            'timestamp': datetime.utcnow().isoformat(),
-            'source_file': schema_info['file_name']
-        },
-        'schema': schema_info
+        'type': 'service',
+        'name': service.name,
+        'methods': [
+            {
+                'name': method.name,
+                'input_type': method.input_type,
+                'output_type': method.output_type,
+                'client_streaming': method.client_streaming,
+                'server_streaming': method.server_streaming
+            }
+            for method in service.method
+        ]
     }
 
-def store_schema_snapshot(snapshot: dict, file_name: str) -> None:
+def extract_schema_info(file_desc) -> list:
     """
-    Store the schema snapshot as a JSON file.
+    Extract structured information from a file descriptor.
+    Returns a list of documents (messages, services, enums).
+    """
+    documents = []
+    base_metadata = {
+        'file_name': file_desc.name,
+        'package': file_desc.package,
+        'syntax': file_desc.syntax
+    }
     
-    Args:
-        snapshot (dict): Schema snapshot to store
-        file_name (str): Original proto file name (used to generate JSON file name)
+    # Extract top-level messages
+    for message in file_desc.message_type:
+        message_docs = extract_message_info(message)
+        for doc in message_docs:
+            doc['metadata'] = {**base_metadata}
+        documents.extend(message_docs)
+    
+    # Extract top-level enums
+    for enum in file_desc.enum_type:
+        enum_doc = {
+            'type': 'enum',
+            'name': enum.name,
+            'full_path': enum.name,
+            'parent_message': None,
+            'values': [
+                {'name': value.name, 'number': value.number}
+                for value in enum.value
+            ],
+            'metadata': {**base_metadata}
+        }
+        documents.append(enum_doc)
+    
+    # Extract services
+    for service in file_desc.service:
+        service_doc = extract_service_info(service)
+        service_doc['metadata'] = {**base_metadata}
+        documents.append(service_doc)
+    
+    return documents
+
+def store_schema_documents(documents: list, base_name: str) -> None:
+    """
+    Store schema documents as separate JSON files.
     """
     output_dir = os.path.join('output', 'json')
-    base_name = os.path.splitext(os.path.basename(file_name))[0]
-    json_path = os.path.join(output_dir, f"{base_name}.json")
+    timestamp = datetime.utcnow().isoformat()
     
-    with open(json_path, 'w') as f:
-        json.dump(snapshot, f, indent=2)
-    
-    console.print(f"[green]Stored schema snapshot: {json_path}[/green]")
+    for i, doc in enumerate(documents):
+        try:
+            # Create a unique filename for each document
+            doc_type = doc.get('type')
+            doc_name = doc.get('name')
+            
+            if not doc_type or not doc_name:
+                console.print(f"[yellow]Skipping document {i}: missing type or name[/yellow]")
+                continue
+                
+            filename = f"{base_name}_{doc_type}_{doc_name}.json"
+            file_path = os.path.join(output_dir, filename)
+            
+            # Ensure metadata exists
+            if 'metadata' not in doc:
+                doc['metadata'] = {}
+            
+            # Add additional metadata
+            doc['metadata'].update({
+                'timestamp': timestamp,
+                'document_id': f"{base_name}_{i}"
+            })
+            
+            # Validate document structure
+            if not isinstance(doc, dict):
+                raise ValueError(f"Invalid document structure: expected dict, got {type(doc)}")
+            
+            # Write to file
+            with open(file_path, 'w') as f:
+                json.dump(doc, f, indent=2)
+            
+            console.print(f"[green]Stored document: {filename}[/green]")
+            
+        except Exception as e:
+            console.print(f"[red]Error storing document {i}: {str(e)}[/red]")
 
 def process_descriptor_file(descriptor_path: str) -> None:
     """
@@ -174,11 +205,8 @@ def process_descriptor_file(descriptor_path: str) -> None:
             # Step 1: Extract schema information
             schema_info = extract_schema_info(file_desc)
             
-            # Step 2: Create snapshot
-            snapshot = create_schema_snapshot(schema_info)
-            
-            # Step 3: Store snapshot
-            store_schema_snapshot(snapshot, file_desc.name)
+            # Step 2: Store schema documents
+            store_schema_documents(schema_info, os.path.splitext(os.path.basename(file_desc.name))[0])
 
     except Exception as e:
         console.print(f"[red]Error processing descriptor file {descriptor_path}: {str(e)}[/red]")
