@@ -60,7 +60,6 @@ enum Gender {
 
 // Existing enumeration with modifications
 enum ActivityType {
-  UNKNOWN = 0;
   POSTED = 1;
   LIKED = 2;
   COMMENTED = 3;
@@ -79,7 +78,6 @@ enum StreamStatus {
 enum ListingStatus {
   ACTIVE = 0;
   SOLD = 1;
-  CANCELLED = 2;
 }
 
 // Message definitions
