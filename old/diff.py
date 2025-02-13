@@ -87,8 +87,8 @@ def compute_message_diffs(file1: str, file2: str) -> (dict, list, list):
 
 def main():
     # Paths to two versions of your proto file
-    file_v1 = '/proto/pv1.proto'
-    file_v2 = '/proto/pv2.proto'
+    file_v1 = '/proto/proto_v1.proto'
+    file_v2 = '/proto/proto_v2.proto'
 
     # Compute diffs and embeddings for each proto message
     diff_mapping, embeddings_list, index_to_key = compute_message_diffs(file_v1, file_v2)
