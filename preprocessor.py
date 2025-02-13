@@ -36,6 +36,28 @@ def extract_schema_info(file_desc) -> dict:
     Returns:
         dict: Structured schema information
     """
+    # Mapping of protobuf type numbers to their names
+    FIELD_TYPES = {
+        1: "double",
+        2: "float",
+        3: "int64",
+        4: "uint64",
+        5: "int32",
+        6: "fixed64",
+        7: "fixed32",
+        8: "bool",
+        9: "string",
+        10: "group",
+        11: "message",
+        12: "bytes",
+        13: "uint32",
+        14: "enum",
+        15: "sfixed32",
+        16: "sfixed64",
+        17: "sint32",
+        18: "sint64"
+    }
+
     schema_info = {
         'file_name': file_desc.name,
         'package': file_desc.package,
@@ -53,12 +75,14 @@ def extract_schema_info(file_desc) -> dict:
         }
         
         for field in message.field:
+            # Use type_name for custom types, otherwise use the mapped standard type
+            field_type = field.type_name if field.type_name else FIELD_TYPES.get(field.type, f"unknown_{field.type}")
+            
             field_info = {
                 'name': field.name,
                 'number': field.number,
                 'label': field.label,
-                'type': field.type,
-                'type_name': field.type_name,
+                'type': field_type,  # Use the resolved type name
                 'json_name': field.json_name,
                 'options': str(field.options) if field.HasField('options') else None
             }
