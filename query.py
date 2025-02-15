@@ -91,7 +91,7 @@ def perform_similarity_search(vectorstore: Chroma, query: str, k: int = 3):
 @click.command()
 @click.option('--vectorstore-dir', '-v', default='output/vectorstore',
               help='Directory containing the vector store (default: output/vectorstore)')
-@click.option('--query', '-q', default="What messages have field called name?",
+@click.option('--query', '-q', default="What messages have field called location with type string?",
               help='Query string for similarity search')
 @click.option('--num-results', '-n', default=3,
               help='Number of results to return (default: 3)')
