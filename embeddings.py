@@ -13,11 +13,11 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Initialize Rich console
-console = Console()
+console = Console(width=150)
 
 def format_message_content(doc: dict) -> str:
     """Format message content for better embedding context."""
-    console.print(f"[blue]Formatting message content from type: {type(doc)}[/blue]")
+    console.print(f"[blue]Formatting message content [/blue]")
     
     content_parts = [
         f"Message: {doc['name']}",
@@ -43,7 +43,7 @@ def format_message_content(doc: dict) -> str:
 
 def format_enum_content(doc: dict) -> str:
     """Format enum content for better embedding context."""
-    console.print(f"[blue]Formatting enum content from type: {type(doc)}[/blue]")
+    console.print(f"[blue]Formatting enum content[/blue]")
     
     content_parts = [
         f"Enum: {doc['name']}",
@@ -61,7 +61,7 @@ def format_enum_content(doc: dict) -> str:
 
 def format_service_content(doc: dict) -> str:
     """Format service content for better embedding context."""
-    console.print(f"[blue]Formatting service content from type: {type(doc)}[/blue]")
+    console.print(f"[blue]Formatting service content[/blue]")
     
     content_parts = [
         f"Service: {doc['name']}",
@@ -103,8 +103,7 @@ def create_document(json_doc: dict) -> Document:
     """
     Create a LangChain document from a JSON document with formatted content.
     """
-    console.print(f"[blue]Creating document from JSON type: {type(json_doc)}[/blue]")
-    
+
     # Format content based on document type
     if json_doc['type'] == 'message':
         content = format_message_content(json_doc)
@@ -135,7 +134,6 @@ def create_document(json_doc: dict) -> Document:
     # Use custom filter instead of filter_complex_metadata
     metadata = filter_metadata(metadata)
 
-    console.print(f"[blue]Generated content type: {type(content)}[/blue]")
     console.print(f"[blue]Content preview:[/blue]")
     console.print(content)
     console.print("\n")
@@ -161,8 +159,7 @@ def load_json_files(input_folder: str) -> list[Document]:
                 with open(file_path, 'r') as f:
                     json_doc = json.load(f)
                 
-                console.print(f"[blue]Loaded JSON type: {type(json_doc)}[/blue]")
-                console.print(f"[blue]JSON keys: {json_doc.keys()}[/blue]")
+                console.print(f"[blue]Loaded JSON type: {json_doc['name']} - {json_doc['type']} [/blue]")
                 
                 # Create document with formatted content
                 doc = create_document(json_doc)
@@ -229,13 +226,13 @@ def main(input_folder: str, persist_dir: str):
         console.print(f"\n[blue]Loading JSON files from {input_folder}...[/blue]")
         documents = load_json_files(input_folder)
         
-        if not documents:
-            console.print("[yellow]No documents found to process[/yellow]")
-            return
+        # if not documents:
+        #     console.print("[yellow]No documents found to process[/yellow]")
+        #     return
             
         # Create and persist vector store
-        console.print(f"\n[blue]Creating vector store in {persist_dir}...[/blue]")
-        create_vector_store(documents, persist_dir)
+        #console.print(f"\n[blue]Creating vector store in {persist_dir}...[/blue]")
+        #create_vector_store(documents, persist_dir)
 
     except Exception as e:
         console.print(f"[red]Error in main process: {str(e)}[/red]")
