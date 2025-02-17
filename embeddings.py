@@ -15,71 +15,6 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 # Initialize Rich console
 console = Console(width=150)
 
-# def format_message_content(doc: dict) -> str:
-#     """Format message content for better embedding context."""
-#     console.print(f"[blue]Formatting message content [/blue]")
-#
-#     content_parts = [
-#         f"Message: {doc['name']}",
-#         f"Path: {doc['full_path']}",
-#         "Fields:"
-#     ]
-#
-#     for field in doc['fields']:
-#         field_str = f"- {field['name']}: {field['type']}"
-#         if field['label'] == 3:  # repeated
-#             field_str += " (repeated)"
-#         content_parts.append(field_str)
-#
-#     if doc['nested_messages']:
-#         content_parts.append("Nested Messages:")
-#         content_parts.extend([f"- {msg}" for msg in doc['nested_messages']])
-#
-#     if doc['nested_enums']:
-#         content_parts.append("Nested Enums:")
-#         content_parts.extend([f"- {enum}" for enum in doc['nested_enums']])
-#
-#     return "\n".join(content_parts)
-
-# def format_enum_content(doc: dict) -> str:
-#     """Format enum content for better embedding context."""
-#     console.print(f"[blue]Formatting enum content[/blue]")
-#
-#     content_parts = [
-#         f"Enum: {doc['name']}",
-#         f"Path: {doc['full_path']}"
-#     ]
-#
-#     if doc['parent_message']:
-#         content_parts.append(f"Defined in message: {doc['parent_message']}")
-#
-#     content_parts.append("Values:")
-#     for value in doc['values']:
-#         content_parts.append(f"- {value['name']} = {value['number']}")
-#
-#     return "\n".join(content_parts)
-
-# def format_service_content(doc: dict) -> str:
-#     """Format service content for better embedding context."""
-#     console.print(f"[blue]Formatting service content[/blue]")
-#
-#     content_parts = [
-#         f"Service: {doc['name']}",
-#         "Methods:"
-#     ]
-#
-#     for method in doc['methods']:
-#         method_str = f"- {method['name']}"
-#         method_str += f"\n  Input: {method['input_type']}"
-#         method_str += f"\n  Output: {method['output_type']}"
-#         if method['client_streaming']:
-#             method_str += "\n  (client streaming)"
-#         if method['server_streaming']:
-#             method_str += "\n  (server streaming)"
-#         content_parts.append(method_str)
-#
-#     return "\n".join(content_parts)
-
 def filter_metadata(metadata: dict) -> dict:
     """
     Filter metadata to ensure only primitive types.
@@ -270,47 +205,6 @@ def create_documents(json_doc: dict) -> list[Document]:
         documents.append(doc)
     
     return documents
-
-# def create_document(json_doc: dict) -> Document:
-#     """
-#     Create a LangChain document from a JSON document with formatted content.
-#     """
-#
-#     # Format content based on document type
-#     if json_doc['type'] == 'message':
-#         content = format_message_content(json_doc)
-#     elif json_doc['type'] == 'enum':
-#         content = format_enum_content(json_doc)
-#     else:  # service
-#         content = format_service_content(json_doc)
-#
-#     # Create metadata with only primitive types
-#     metadata = {
-#         'type': json_doc['type'],
-#         'name': json_doc['name'],
-#         'file_name': json_doc['metadata']['file_name'],
-#         'package': json_doc['metadata']['package'],
-#         'document_id': json_doc['metadata']['document_id'],
-#         'timestamp': json_doc['metadata']['timestamp']
-#     }
-#
-#     # Add type-specific metadata
-#     if json_doc['type'] == 'message':
-#         metadata['full_path'] = json_doc['full_path']
-#         metadata['field_names'] = ','.join(f['name'] for f in json_doc['fields'])
-#         metadata['field_types'] = ','.join(f['type'] for f in json_doc['fields'])
-#     elif json_doc['type'] == 'enum':
-#         metadata['full_path'] = json_doc['full_path']
-#         metadata['parent_message'] = json_doc['parent_message']
-#
-#     # Use custom filter instead of filter_complex_metadata
-#     metadata = filter_metadata(metadata)
-#
-#     console.print(f"[blue]Content preview:[/blue]")
-#     console.print(content)
-#     console.print("\n")
-#
-#     return Document(page_content=content, metadata=metadata)
 
 def load_json_files(input_folder: str) -> list[Document]:
     """
