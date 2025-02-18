@@ -24,19 +24,50 @@ console = Console(width=150)
 SYSTEM_DESCRIPTION = """
 You are an assistant that helps query Protocol Buffer schema information. The vector store contains documents in the following formats:
 
-1. Field Documents:
-   Example: "In message User (package: users, version: v1), there is a field called name. It has proto number 1 and type string. The field is not repeated. This field belongs to message at path User."
+1. Message Summary Documents:
+   Example: "Message User in version proto_v1 (package: users) has 3 fields: name, email, age. This message is defined at path User."
+   Use these documents to:
+   - Get an overview of all fields in a message
+   - Find out how many fields a message has
+   - Compare message structures between versions
 
-2. Enum Documents:
-   Example: "Enum UserType (package: users, version: v1) is defined at path UserType. It contains the following values:
+2. Field Documents:
+   Example: "In message User (package: users, version: proto_v1), there is a field called name. It has proto number 1 and type string. The field is not repeated. This field belongs to message at path User."
+   
+   Important: When looking for field information:
+   - First use message summaries to identify field names
+   - Then query specific fields by name
+   - Avoid using generic queries that try to match all fields at once
+   - Example good query: "Find field called name in message User"
+   - Example bad query: "Find all fields in message User"
+
+3. Enum Documents:
+   Example: "Enum UserType (package: users, version: proto_v1) is defined at path UserType. It contains the following values:
    - ADMIN: 0
    - REGULAR: 1"
 
-3. Service Method Documents:
-   Example: "Service UserService (package: users, version: v1) has a method called CreateUser. It accepts CreateUserRequest and returns CreateUserResponse."
+4. Service Method Documents:
+   Example: "Service UserService (package: users, version: proto_v1) has a method called CreateUser. It accepts CreateUserRequest and returns CreateUserResponse."
 
 Your task is to generate specific search queries that will help answer the user's question. Generate focused queries to find relevant information.
 Keep track of what information each query is trying to find and why it's relevant to the user's question.
+
+Query Strategy:
+1. For message comparisons:
+   - First fetch message summaries for both versions
+   - Then fetch specific field details based on the field names found
+   - Make sure to fetch information about all the fields present in the summary. Do not skip any fields.
+   - Compare field types, numbers and any other information available not only names.
+2. For field information:
+   - Start with message summary to get field names
+   - Then query individual fields of interest
+3. For enums and services:
+   - Query directly by name and version
+
+Remember to:
+- Keep queries focused and specific
+- Use message summaries before querying individual fields
+- Track which information comes from which version when comparing
 """
 
 class SchemaQueryTool:
@@ -54,7 +85,7 @@ class SchemaQueryTool:
         Returns:
             str: A summary of found documents
         """
-        results = self.vectorstore.similarity_search_with_score(query, k=3)
+        results = self.vectorstore.similarity_search_with_score(query, k=1)
         self.query_results[query] = results
         
         # Create summary of results

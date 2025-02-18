@@ -344,7 +344,7 @@ message Poll {
   required int64 user_id = 2;
   required string query = 3; // renamed from question
   repeated string options = 4;
-  repeated int32 votes = 5;
+  repeated int64 votes = 5;
   optional int64 timestamp = 6;
   optional bool multiple_choice = 7 [default = false]; // new field
 }

@@ -168,6 +168,37 @@ def create_service_overview_document(service_doc: dict) -> Document:
 
     return Document(page_content=content, metadata=filter_metadata(metadata))
 
+def create_message_summary_document(message_doc: dict) -> Document:
+    """Create a summary document for a message listing all its fields."""
+    # Get version from file name (e.g., proto_v1.proto -> v1)
+    version = os.path.splitext(message_doc['metadata']['file_name'])[0]
+    
+    # Get all field names
+    field_names = [field['name'] for field in message_doc['fields']]
+    field_count = len(field_names)
+    
+    # Build natural language description
+    content = (
+        f"Message {message_doc['name']} in version {version} (package: {message_doc['metadata']['package']}) "
+        f"has {field_count} fields: {', '.join(field_names)}. "
+        f"This message is defined at path {message_doc['full_path']}."
+    )
+
+    # Create metadata
+    metadata = {
+        'type': 'message_summary',
+        'name': message_doc['name'],
+        'field_count': field_count,
+        'full_path': message_doc['full_path'],
+        'file_name': message_doc['metadata']['file_name'],
+        'package': message_doc['metadata']['package'],
+        'document_id': f"{message_doc['metadata']['document_id']}_summary"
+    }
+
+    console.print(f"[yellow]Created message summary document: {content}[/yellow]")
+
+    return Document(page_content=content, metadata=filter_metadata(metadata))
+
 def create_documents(json_doc: dict) -> list[Document]:
     """
     Create multiple documents from a single JSON document.
@@ -175,6 +206,10 @@ def create_documents(json_doc: dict) -> list[Document]:
     documents = []
     
     if json_doc['type'] == 'message':
+        # Create summary document first
+        summary_doc = create_message_summary_document(json_doc)
+        documents.append(summary_doc)
+        
         # Create documents for each field
         for field in json_doc['fields']:
             doc = create_field_document(field, json_doc)
