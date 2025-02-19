@@ -73,6 +73,7 @@ Provided information contains text desciption of the proto messages, enums and s
 If you have messages or enums or services with the same name but different versions compare what fields do they have.
 If field has the same name in two messages that have different version consider it the same field. If at the same time they have different types or proto numbers mention this 
 as a difference in the final result. If the same number is used in the same message with different versions but for fields with different names mention this as a difference.
+Search results may include not relevant information - fields from other proto messages, messages from different versions, etc - ignore this information.
 
 Search Results:
 {search_results}
@@ -84,6 +85,7 @@ Requirements for your answer:
 2. Compare versions when relevant
 3. Mention any missing or unclear information
 4. Use a clear structure for complex comparisons
+5. After providing the answer, provide a short summary of the answer. If the question is about differences include only differences in the answer.
 
 {format_instructions}
 """
@@ -197,19 +199,20 @@ class SearchChain(LLMChain):
 
     vectorstore: Chroma
 
-    def execute_search(self, queries: str) -> str:
+    def execute_search(self, queries: str, k: int = 1) -> str:
         results = []
         for query in queries.split('\n'):
             if not query.strip():
                 continue
-            search_results = self.vectorstore.similarity_search_with_score(query, k=1)
+            search_results = self.vectorstore.similarity_search_with_score(query, k=k)
             for doc, score in search_results:
                 results.append(f"Query: {query}\nScore: {score:.4f}\nContent: {doc.page_content}\n")
         return "\n".join(results)
 
     def _call(self, inputs: dict) -> dict:
         validated_inputs = self.SearchChainInput(**inputs)
-        search_results = self.execute_search(validated_inputs.query_plan)
+        k = inputs.get('k', 1)  # Get k from inputs, default to 1
+        search_results = self.execute_search(validated_inputs.query_plan, k=k)
         return self.SearchChainOutput(search_results=search_results).model_dump()
 
 class AnalysisChain(LLMChain):
@@ -380,18 +383,24 @@ class ProtoSchemaChain:
             all_search_results = []
             iteration = 0
             max_iterations = 10
+            k = 1  # Initial k value
             
             while iteration < max_iterations:
                 iteration += 1
                 console.print(f"\n[bold magenta]{'='*10} Iteration {iteration} {'='*10}[/bold magenta]")
                 
                 console.print("\n[blue]Search Chain Input:[/blue]")
-                console.print({"query_plan": query_plan, "question": question})
+                console.print({"query_plan": query_plan, "question": question, "k": k})
                 
                 current_results = self.search_chain.run(
                     query_plan=query_plan,
-                    question=question
+                    question=question,
+                    k=k
                 )
+                
+                # Increment k for next iteration
+                k += 3
+                
                 console.print("\n[green]Search Chain Output:[/green]")
                 console.print(current_results)
                 
