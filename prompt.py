@@ -3,13 +3,12 @@ from typing import Optional
 
 import click
 from dotenv import load_dotenv
-from langchain.chains import SequentialChain, LLMChain
+from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from pydantic import BaseModel
 from rich.console import Console
-from rich.markdown import Markdown
 
 # Load environment variables
 load_dotenv()
@@ -18,115 +17,65 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 # Initialize Rich console
 console = Console(width=150)
 
-# System description for query generation
-# SYSTEM_DESCRIPTION = """
-# You are an assistant that helps query Protocol Buffer schema information. The vector store contains documents in the following formats:
-#
-# 1. Message Summary Documents:
-#    Example: "Message User in version proto_v1 (package: users) has 3 fields: name, email, age. This message is defined at path User."
-#    Use these documents to:
-#    - Get an overview of all fields in a message
-#    - Find out how many fields a message has
-#    - Compare message structures between versions
-#
-# 2. Field Documents:
-#    Example: "In message User (package: users, version: proto_v1), there is a field called name. It has proto number 1 and type string. The field is not repeated. This field belongs to message at path User."
-#
-#    Important: When looking for field information:
-#    - First use message summaries to identify field names
-#    - Then query specific fields by name
-#    - Avoid using generic queries that try to match all fields at once
-#    - Example good query: "Find field called name in message User"
-#    - Example bad query: "Find all fields in message User"
-#
-# 3. Enum Documents:
-#    Example: "Enum UserType (package: users, version: proto_v1) is defined at path UserType. It contains the following values:
-#    - ADMIN: 0
-#    - REGULAR: 1"
-#
-# 4. Service Method Documents:
-#    Example: "Service UserService (package: users, version: proto_v1) has a method called CreateUser. It accepts CreateUserRequest and returns CreateUserResponse."
-#
-# Your task is to generate specific search queries that will help answer the user's question. Generate focused queries to find relevant information.
-# Keep track of what information each query is trying to find and why it's relevant to the user's question.
-#
-# Query Strategy:
-# 1. For message comparisons:
-#    - First fetch message summaries for both versions
-#    - Then fetch specific field details based on the field names found
-#    - Make sure to fetch information about all the fields present in the summary. Do not skip any fields.
-#    - Compare field types, numbers and any other information available not only names.
-# 2. For field information:
-#    - Start with message summary to get field names
-#    - Then query individual fields of interest
-# 3. For enums and services:
-#    - Query directly by name and version
-#
-# Remember to:
-# - Keep queries focused and specific
-# - Use message summaries before querying individual fields
-# - Track which information comes from which version when comparing
-# """
-
-# First chain prompt - Planning queries
-QUERY_PLANNING_TEMPLATE = """
-You are an assistant that helps analyze Protocol Buffer schemas. Your task is to plan what information you need to gather to answer the user's question.
-
-Available document types in the vector store:
-1. Message Summary Documents - Overview of all fields in a message
-2. Field Documents - Detailed information about each field
-3. Enum Documents - Enum definitions and values
-4. Service Method Documents - Service method details
+# Initial planning prompt to identify messages/enums
+INITIAL_PLANNING_TEMPLATE = """
+Your task is to identify all Protocol Buffer messages and enums that need to be examined to answer the user's question.
+Then generate queries to fetch their summary documents.
 
 Question: {question}
 
-Think step by step:
-1. What specific information do you need to answer this question?
-2. What documents should you look for first?
-3. What follow-up information will you need?
+Example summary documents in the database:
+1. Message summaries: "Message Poll in version proto_v1 (package: polls) has 5 fields: title, description, options, created_at, author. This message is defined at path Poll."
+2. Enum summaries: "Enum PollStatus in version proto_v1 is defined at path PollStatus. It contains values: DRAFT: 0, ACTIVE: 1, CLOSED: 2"
 
-Generate a list of specific queries to fetch all necessary information. Remember to:
-- Start with message summaries to get field lists
-- Then fetch details for each field mentioned in summaries
-- Don't skip any fields when comparing versions
-- Look for all relevant details (types, numbers, paths, etc.)
+Generate specific queries that will match these summary documents.
+Query format is "Message <message/enum name> in version <proto version>".
+For example "Message Advertisement in version proto_v1"
 
-Output your response in the following format:
-THOUGHT PROCESS:
-<explain your reasoning>
-
-QUERIES:
-<list each query on a new line>
-
-{format_instructions}
+Output format:
+<list all messages and enums that need to be looked up. Do not output any other text only list queries. One query per line>
 """
 
-# Second chain prompt - Analyzing results
-ANALYSIS_TEMPLATE = """
-Based on the search results below, provide a comprehensive analysis of the Protocol Buffer schema information.
+# Detailed planning prompt that uses summaries
+DETAILED_PLANNING_TEMPLATE = """
+Using the summaries below, generate specific queries to fetch detailed information about fields and values of the proto messages and enums.
+Message summaries below can contain summaries for multiple documents.
 
-Search Results:
-{search_results}
+Example summary documents:
+1. Message summaries: "Message Notification in version proto_v2 (package: socialmedia) has 7 fields: id, user_id, type, message, read, timestamp, category. This message is defined at path Notification."
+2. Enum summaries: "Enum PollStatus in version proto_v1 is defined at path PollStatus. It contains values: DRAFT: 0, ACTIVE: 1, CLOSED: 2"
 
-Original Question: {question}
+For each summary generate a query for every fields of the proto message.
+Generate specific queries using exact names from the summaries.
+Make sure queries exactly match the document format in the database. 
+For example message summary generate following queries:
+    In message Notification (version: proto_v2), there is a field called id
+    In message Notification (version: proto_v2), there is a field called user_id
+    In message Notification (version: proto_v2), there is a field called type
+    In message Notification (version: proto_v2), there is a field called message
+    In message Notification (version: proto_v2), there is a field called read
+    In message Notification (version: proto_v2), there is a field called timestamp
+    In message Notification (version: proto_v2), there is a field called category
 
-Analyze the information, noting:
-1. What information was found
-2. Any missing information
-3. Any version differences
-4. Any interesting patterns or details
+If there are multiple summaries present make sure to generate queries for each summary in the way described above.    
+    
+Available Summaries:
+{summaries}
 
-Provide your analysis in a structured format that will help generate the final answer.
-
-{format_instructions}
+Output format:
+<list specific queries for each field/value needed. Do not include any other text in the output. It should only be one query per line.>
 """
 
 # Final chain prompt - Generating answer
 FINAL_ANSWER_TEMPLATE = """
-Based on the analysis below, provide a clear and complete answer to the user's question.
+Based on the search results below that contain all the relevant information about proto messages, provide a clear and complete answer to the user's question.
+Provided information contains text desciption of the proto messages, enums and services.
+If you have messages or enums or services with the same name but different versions compare what fields do they have.
+If field has the same name in two messages that have different version consider it the same field. If at the same time they have different types or proto numbers mention this 
+as a difference in the final result. If the same number is used in the same message with different versions but for fields with different names mention this as a difference.
 
-Analysis:
-{analysis}
+Search Results:
+{search_results}
 
 Original Question: {question}
 
@@ -141,22 +90,33 @@ Requirements for your answer:
 
 # Add new template for validation
 VALIDATION_TEMPLATE = """
-Compare the original query plan with the search results to determine if we have all needed information.
+Your task is to compare queries and their results. You should check if the information in the query matches with the result provided.
 
-Original Plan:
+For example if you have following query: "In message Notification (version: proto_v2), there is a field called id".
+There should be an answer that contains the information about id field in the Notification message and it should mention that version is the proto_v2.
+Note that version and names should match exactly in query and in the response.
+
+So example answer for this query could look like:
+"Query: In message Notification (version: proto_v2), there is a field called id\nScore: 0.1048\nContent: In message Notification (package: 
+socialmedia, version: proto_v2), there is a field called id. It has proto number 1 and type int64. The field is not repeated. This field belongs to 
+message at path Notification."
+Ignore score information.
+
+Example of query that with incorrect response:
+    query: In message Test (version: v5), there is a field called name
+    response: In message Test (package: test, version: v3), there is a field called name. It has proto number 5 and type int32. The field is 
+              repeated. This field belongs to message at path Test.
+This response is not correct as the versions don't match - v5 is not equal to v3.
+
+Original Plan (contains all the queries. one query per line):
 {query_plan}
 
-Search Results:
+Search Results (contains all the results, in the format described above):
 {search_results}
 
-Original Question: {question}
-
-Analyze step by step:
-1. What information was planned to be retrieved?
-2. What information was actually found?
-3. What information is still missing?
-
-If any information is missing, generate new specific queries to fetch it.
+Analise if every query has it's matching response. 
+If any information is missing, add query that is missing information to the output as described below.
+It also may happen that there is some additional response that does not match any query - ignore this information.
 
 Output your response in this format:
 STATUS: [COMPLETE or INCOMPLETE]
@@ -168,7 +128,7 @@ MISSING:
 <list any missing information or write "None" if complete>
 
 NEW QUERIES:
-<if INCOMPLETE, list new specific queries to fetch missing information>
+<if INCOMPLETE, list specific queries that ary missing responses. It should only be one query per line.>
 <if COMPLETE, write "None">
 
 {format_instructions}
@@ -181,7 +141,7 @@ class ValidationChain(LLMChain):
     class ValidationInput(BaseModel):
         query_plan: str
         search_results: str
-        question: str
+        question: str  # Keep in input model but don't use in prompt
 
     class ValidationOutput(BaseModel):
         status: str
@@ -191,8 +151,11 @@ class ValidationChain(LLMChain):
 
     def _call(self, inputs: dict) -> dict:
         validated_inputs = self.ValidationInput(**inputs)
-        # Get raw LLM output
-        raw_response = self.llm.invoke(self.prompt.format(**inputs))
+        # Get raw LLM output but only use query_plan and search_results
+        raw_response = self.llm.invoke(self.prompt.format(
+            query_plan=inputs["query_plan"],
+            search_results=inputs["search_results"]
+        ))
         response_text = raw_response.content
         
         # Parse the response to extract status and queries
@@ -201,7 +164,8 @@ class ValidationChain(LLMChain):
             "status": "INCOMPLETE",
             "found": "",
             "missing": "",
-            "new_queries": ""
+            "new_queries": "",
+            "original_question": inputs["question"]  # Pass through the question
         }
         
         current_section = None
@@ -233,10 +197,6 @@ class SearchChain(LLMChain):
 
     vectorstore: Chroma
 
-    # def __init__(self, vectorstore: Chroma, **kwargs):
-    #     self.vectorstore = vectorstore
-    #     super().__init__(**kwargs)
-
     def execute_search(self, queries: str) -> str:
         results = []
         for query in queries.split('\n'):
@@ -264,6 +224,48 @@ class AnalysisChain(LLMChain):
         validated_inputs = self.AnalysisChainInput(**inputs)
         return super()._call(inputs)
 
+class InitialPlanningChain(LLMChain):
+    class Config:
+        arbitrary_types_allowed = True
+
+    def _call(self, inputs: dict) -> dict:
+        result = super()._call(inputs)
+        # Pass through the original question
+        return {
+            "initial_plan": result["initial_plan"],
+            "original_question": inputs["question"]
+        }
+
+class SummaryFetchChain(LLMChain):
+    class Config:
+        arbitrary_types_allowed = True
+
+    vectorstore: Chroma
+
+    def _call(self, inputs: dict) -> dict:
+        queries = inputs["initial_plan"].split("\n")
+        results = []
+        for query in queries:
+            if not query.strip():
+                continue
+            search_results = self.vectorstore.similarity_search_with_score(query, k=1)
+            for doc, score in search_results:
+                results.append(f"Query: {query}\nScore: {score:.4f}\nContent: {doc.page_content}\n")
+        # Pass through the original question
+        return {
+            "summaries": "\n".join(results),
+            "original_question": inputs["original_question"]
+        }
+
+class DetailedPlanningChain(LLMChain):
+    class Config:
+        arbitrary_types_allowed = True
+
+    def _call(self, inputs: dict) -> dict:
+        # Use the original question that was passed through
+        result = super()._call({"summaries": inputs["summaries"]})
+        return result
+
 class ProtoSchemaChain:
     def __init__(self, vectorstore: Chroma):
         self.llm = ChatOpenAI(model="gpt-4", temperature=0)
@@ -271,15 +273,35 @@ class ProtoSchemaChain:
         self.setup_chains()
 
     def setup_chains(self):
-        # Planning chain
-        self.planning_chain = LLMChain(
+        # Initial planning chain
+        self.initial_planning_chain = InitialPlanningChain(
             llm=self.llm,
             prompt=PromptTemplate(
-                template=QUERY_PLANNING_TEMPLATE,
+                template=INITIAL_PLANNING_TEMPLATE,
                 input_variables=["question"],
-                partial_variables={"format_instructions": "List each query that should be sent to the vector store."}
             ),
-            output_key="response"
+            output_key="initial_plan"
+        )
+
+        # Summary fetch chain
+        self.summary_fetch_chain = SummaryFetchChain(
+            vectorstore=self.vectorstore,
+            llm=self.llm,
+            prompt=PromptTemplate(
+                template="Fetching summaries...",
+                input_variables=["initial_plan"]
+            ),
+            output_key="summaries"
+        )
+
+        # Detailed planning chain
+        self.detailed_planning_chain = DetailedPlanningChain(
+            llm=self.llm,
+            prompt=PromptTemplate(
+                template=DETAILED_PLANNING_TEMPLATE,
+                input_variables=["summaries"]
+            ),
+            output_key="query_plan"
         )
 
         # Initialize search chain
@@ -293,23 +315,12 @@ class ProtoSchemaChain:
             output_key="search_results"
         )
 
-        # Initialize analysis chain
-        self.analysis_chain = AnalysisChain(
-            llm=self.llm,
-            prompt=PromptTemplate(
-                template=ANALYSIS_TEMPLATE,
-                input_variables=["search_results", "question"],
-                partial_variables={"format_instructions": "Provide a structured analysis of the findings."}
-            ),
-            output_key="response"
-        )
-
         # Final answer chain
         self.answer_chain = LLMChain(
             llm=self.llm,
             prompt=PromptTemplate(
                 template=FINAL_ANSWER_TEMPLATE,
-                input_variables=["analysis", "question"],
+                input_variables=["search_results", "question"],
                 partial_variables={"format_instructions": "Provide a clear and complete answer."}
             ),
             output_key="response"
@@ -320,7 +331,7 @@ class ProtoSchemaChain:
             llm=self.llm,
             prompt=PromptTemplate(
                 template=VALIDATION_TEMPLATE,
-                input_variables=["query_plan", "search_results", "question"],
+                input_variables=["query_plan", "search_results"],
                 partial_variables={"format_instructions": "Ensure clear separation between sections."}
             ),
             output_key="response"
@@ -332,35 +343,61 @@ class ProtoSchemaChain:
     def run(self, question: str):
         """Run the full chain with validation loop."""
         try:
-            # Get initial query plan
-            console.print("\n[blue]Planning Chain Input:[/blue]")
-            console.print({"question": question})
-            
-            query_plan = self.planning_chain.run(question=question)
-            console.print("\n[green]Planning Chain Output:[/green]")
-            console.print(query_plan)
+            # Step divider function
+            def print_step(step_name: str):
+                console.print(f"\n{'='*20} {step_name} {'='*20}", style="bold cyan")
 
-            # Initialize results storage
+            print_step("INITIAL PLANNING")
+            # Initial planning with question pass-through
+            initial_result = self.initial_planning_chain.invoke({
+                "question": question
+            })
+            console.print("\n[green]Initial Planning Output:[/green]")
+            console.print(initial_result["initial_plan"])
+
+            print_step("SUMMARY FETCH")
+            # Fetch summaries, passing through the question
+            summary_result = self.summary_fetch_chain.invoke({
+                "initial_plan": initial_result["initial_plan"],
+                "original_question": initial_result["original_question"]
+            })
+            console.print("\n[green]Summary Fetch Output:[/green]")
+            console.print(summary_result["summaries"])
+
+            print_step("DETAILED PLANNING")
+            # Detailed planning using passed through question
+            detailed_result = self.detailed_planning_chain.invoke({
+                "summaries": summary_result["summaries"]
+            })
+            console.print("\n[green]Detailed Planning Output:[/green]")
+            console.print(detailed_result["query_plan"])
+
+            # Initialize query_plan from detailed planning result
+            query_plan = detailed_result["query_plan"]
+
+            print_step("SEARCH AND VALIDATION LOOP")
+            # Initialize results storage for validation loop
             all_search_results = []
             iteration = 0
             max_iterations = 10
             
             while iteration < max_iterations:
                 iteration += 1
-                console.print(f"\n[blue]Iteration {iteration}:[/blue]")
+                console.print(f"\n[bold magenta]{'='*10} Iteration {iteration} {'='*10}[/bold magenta]")
                 
-                # Execute searches
                 console.print("\n[blue]Search Chain Input:[/blue]")
                 console.print({"query_plan": query_plan, "question": question})
                 
-                current_results = self.search_chain.run(query_plan=query_plan, question=question)
+                current_results = self.search_chain.run(
+                    query_plan=query_plan,
+                    question=question
+                )
                 console.print("\n[green]Search Chain Output:[/green]")
                 console.print(current_results)
                 
                 all_search_results.append(current_results)
                 merged_results = "\n\n".join(all_search_results)
                 
-                # Validate results
                 console.print("\n[blue]Validation Chain Input:[/blue]")
                 console.print({
                     "query_plan": query_plan,
@@ -378,7 +415,6 @@ class ProtoSchemaChain:
                 
                 validation_data = validation["response"]
                 
-                # Display validation results
                 console.print("\n[yellow]Validation Results:[/yellow]")
                 console.print(f"Status: {validation_data['status']}")
                 console.print("\nFound Information:")
@@ -388,7 +424,6 @@ class ProtoSchemaChain:
                     console.print("\nMissing Information:")
                     console.print(validation_data['missing'])
                 
-                # Check if we're done
                 if validation_data['status'] == "COMPLETE":
                     console.print("\n[green]All required information has been found![/green]")
                     break
@@ -398,38 +433,28 @@ class ProtoSchemaChain:
                     break
                     
                 # Update query plan with new queries
-                query_plan = validation_data['new_queries']
+                query_plan = validation_data['new_queries']  # Store as query_plan, not detailed_result
                 console.print("\n[blue]New Queries Generated:[/blue]")
                 console.print(query_plan)
                 
                 if iteration == max_iterations:
-                    console.print("\n[yellow]Reached maximum iterations. Proceeding with available information.[/yellow]")
-            
-            # Proceed with analysis and final answer
-            console.print("\n[blue]Analysis Chain Input:[/blue]")
+                    console.print("\n[yellow]Reached maximum iterations.[/yellow]")
+
+            print_step("FINAL ANSWER")
+            # Proceed with answer generation
+            console.print("\n[blue]Answer Chain Input:[/blue]")
             console.print({
                 "search_results": merged_results,
                 "question": question
             })
             
-            analysis = self.analysis_chain.run(search_results=merged_results, question=question)
-            console.print("\n[green]Analysis Chain Output:[/green]")
-            console.print(analysis)
-            
-            console.print("\n[blue]Answer Chain Input:[/blue]")
-            console.print({
-                "analysis": analysis,
-                "question": question
-            })
-            
-            answer = self.answer_chain.run(analysis=analysis, question=question)
+            answer = self.answer_chain.run(search_results=merged_results, question=question)
             console.print("\n[green]Answer Chain Output:[/green]")
             console.print(answer)
             
             return {
                 "query_plan": query_plan,
                 "search_results": merged_results,
-                "analysis": analysis,
                 "answer": answer,
                 "iterations": iteration
             }
@@ -446,17 +471,6 @@ def process_prompt(vectorstore: Chroma, user_prompt: str):
         # Initialize and run the chain
         chain = ProtoSchemaChain(vectorstore)
         results = chain.run(user_prompt)
-        
-        # Display results
-        console.print("\n[green]Final Answer:[/green]")
-        console.print(Markdown(results["answer"]))
-        
-        # Display detailed information
-        console.print("\n[cyan]Query Plan:[/cyan]")
-        console.print(results["query_plan"])
-        
-        console.print("\n[cyan]Analysis:[/cyan]")
-        console.print(results["analysis"])
         
     except Exception as e:
         console.print(f"[red]Error processing prompt: {str(e)}[/red]")
