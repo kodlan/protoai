@@ -392,11 +392,11 @@ class ProtoSchemaChain:
                 # console.print("\n[blue]Search Chain Input:[/blue]")
                 # console.print({"query_plan": query_plan, "question": question, "k": k})
                 
-                current_results = self.search_chain.run(
-                    query_plan=query_plan,
-                    question=question,
-                    k=k
-                )
+                current_results = self.search_chain.invoke({
+                    "query_plan": query_plan,
+                    "question": question,
+                    "k": k
+                })["search_results"]  # Extract search_results from response
                 
                 # Increment k for next iteration
                 k += 3
@@ -457,7 +457,10 @@ class ProtoSchemaChain:
             #     "question": question
             # })
             
-            answer = self.answer_chain.run(search_results=merged_results, question=question)
+            answer = self.answer_chain.invoke({
+                "search_results": merged_results,
+                "question": question
+            })["response"]  # Extract response from result
             console.print("\n[green]Answer Chain Output:[/green]")
             console.print(answer)
             
