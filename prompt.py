@@ -389,8 +389,8 @@ class ProtoSchemaChain:
                 iteration += 1
                 console.print(f"\n[bold magenta]{'='*10} Iteration {iteration} {'='*10}[/bold magenta]")
                 
-                console.print("\n[blue]Search Chain Input:[/blue]")
-                console.print({"query_plan": query_plan, "question": question, "k": k})
+                # console.print("\n[blue]Search Chain Input:[/blue]")
+                # console.print({"query_plan": query_plan, "question": question, "k": k})
                 
                 current_results = self.search_chain.run(
                     query_plan=query_plan,
@@ -401,26 +401,26 @@ class ProtoSchemaChain:
                 # Increment k for next iteration
                 k += 3
                 
-                console.print("\n[green]Search Chain Output:[/green]")
-                console.print(current_results)
+                # console.print("\n[green]Search Chain Output:[/green]")
+                # console.print(current_results)
                 
                 all_search_results.append(current_results)
                 merged_results = "\n\n".join(all_search_results)
                 
-                console.print("\n[blue]Validation Chain Input:[/blue]")
-                console.print({
-                    "query_plan": query_plan,
-                    "search_results": merged_results,
-                    "question": question
-                })
+                # console.print("\n[blue]Validation Chain Input:[/blue]")
+                # console.print({
+                #     "query_plan": query_plan,
+                #     "search_results": merged_results,
+                #     "question": question
+                # })
                 
                 validation = self.validation_chain.invoke({
                     "query_plan": query_plan,
                     "search_results": merged_results,
                     "question": question
                 })
-                console.print("\n[green]Validation Chain Output:[/green]")
-                console.print(validation)
+                # console.print("\n[green]Validation Chain Output:[/green]")
+                # console.print(validation)
                 
                 validation_data = validation["response"]
                 
@@ -451,11 +451,11 @@ class ProtoSchemaChain:
 
             print_step("FINAL ANSWER")
             # Proceed with answer generation
-            console.print("\n[blue]Answer Chain Input:[/blue]")
-            console.print({
-                "search_results": merged_results,
-                "question": question
-            })
+            # console.print("\n[blue]Answer Chain Input:[/blue]")
+            # console.print({
+            #     "search_results": merged_results,
+            #     "question": question
+            # })
             
             answer = self.answer_chain.run(search_results=merged_results, question=question)
             console.print("\n[green]Answer Chain Output:[/green]")
