@@ -346,11 +346,15 @@ class ProtoSchemaChain:
     def run(self, question: str):
         """Run the full chain with validation loop."""
         try:
-            # Step divider function
+            # Step divider and description functions
             def print_step(step_name: str):
                 console.print(f"\n{'='*20} {step_name} {'='*20}", style="bold cyan")
 
+            def print_step_description(description: str):
+                console.print(f"\n► {description}")
+
             print_step("INITIAL PLANNING")
+            print_step_description("Analyzing your question to identify which proto messages and enums need to be examined")
             # Initial planning with question pass-through
             initial_result = self.initial_planning_chain.invoke({
                 "question": question
@@ -359,6 +363,7 @@ class ProtoSchemaChain:
             console.print(initial_result["initial_plan"])
 
             print_step("SUMMARY FETCH")
+            print_step_description("Fetching high-level information about the identified messages and enums from the database")
             # Fetch summaries, passing through the question
             summary_result = self.summary_fetch_chain.invoke({
                 "initial_plan": initial_result["initial_plan"],
@@ -368,6 +373,7 @@ class ProtoSchemaChain:
             console.print(summary_result["summaries"])
 
             print_step("DETAILED PLANNING")
+            print_step_description("Analyzing the summaries to create detailed queries for each field and value")
             # Detailed planning using passed through question
             detailed_result = self.detailed_planning_chain.invoke({
                 "summaries": summary_result["summaries"]
@@ -379,6 +385,7 @@ class ProtoSchemaChain:
             query_plan = detailed_result["query_plan"]
 
             print_step("SEARCH AND VALIDATION LOOP")
+            print_step_description("Iteratively searching for detailed information and validating completeness of the results")
             # Initialize results storage for validation loop
             all_search_results = []
             iteration = 0
@@ -391,7 +398,9 @@ class ProtoSchemaChain:
                 
                 # console.print("\n[blue]Search Chain Input:[/blue]")
                 # console.print({"query_plan": query_plan, "question": question, "k": k})
-                
+
+                print_step_description(f"Searching with k={k} and validating results")
+
                 current_results = self.search_chain.invoke({
                     "query_plan": query_plan,
                     "question": question,
@@ -450,6 +459,7 @@ class ProtoSchemaChain:
                     console.print("\n[yellow]Reached maximum iterations.[/yellow]")
 
             print_step("FINAL ANSWER")
+            print_step_description("Analyzing all collected information to provide a comprehensive answer to your question")
             # Proceed with answer generation
             # console.print("\n[blue]Answer Chain Input:[/blue]")
             # console.print({
